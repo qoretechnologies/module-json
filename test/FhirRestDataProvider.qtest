@@ -41,7 +41,7 @@ class TestFhirProviderHandler inherits AbstractHttpRequestHandler {
         string path = parsed.method;
         path =~ s/^fhir\///;
 
-        hash<auto> request = {
+        hash<auto!> request = {
             "method": hdr.method,
             "path": path,
             "params": parsed.params,
