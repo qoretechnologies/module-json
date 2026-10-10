@@ -52,13 +52,17 @@ for test in test/*.qtest; do
     gosu qore:qore qore $test -vv
 done
 
-# Install pip and Python dependencies for integration tests
+# Install the Python dependencies of the integration tests in a virtual environment: pip cannot upgrade packages
+# installed by apt (ex: typing_extensions, which mcp needs in a newer version), as they have no RECORD file
 echo && echo "-- installing Python dependencies for integration tests --"
-apt-get update && apt-get install -y python3-pip
+apt-get update && apt-get install -y python3-venv
+python3 -m venv /tmp/integration-venv
 # Pin protobuf<7: a2a-sdk (incl. latest 1.0.2 and main) calls FieldDescriptor.label,
 # which protobuf 7 removed. See https://github.com/a2aproject/a2a-python/issues/1011.
-python3 -m pip install --break-system-packages mcp httpx 'a2a-sdk[sqlite,http-server]>=1.0.0a0' 'protobuf<7' || \
-    python3 -m pip install mcp httpx 'a2a-sdk[sqlite,http-server]>=1.0.0a0' 'protobuf<7'
+/tmp/integration-venv/bin/pip install mcp httpx 'a2a-sdk[sqlite,http-server]>=1.0.0a0' 'protobuf<7'
+# the integration test scripts use this interpreter
+export PYTHON=/tmp/integration-venv/bin/python
+export PIP=/tmp/integration-venv/bin/pip
 
 # run MCP integration tests with Python SDK
 echo && echo "-- running MCP integration tests --"
