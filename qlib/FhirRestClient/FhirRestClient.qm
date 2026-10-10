@@ -33,6 +33,8 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+# for ConnectionProvider::connection_option_override()
+%requires DataProvider >= 3.9
 
 module FhirRestClient {
     version = "1.0";
