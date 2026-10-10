@@ -17,6 +17,7 @@ Example:
 """
 
 import asyncio
+import re
 import sys
 import json
 import traceback
@@ -28,7 +29,12 @@ from contextlib import asynccontextmanager
 
 try:
     from mcp import ClientSession
-    from mcp.client.streamable_http import streamablehttp_client
+    try:
+        # MCP Python SDK 1.2x and later; 1.x yields (read, write, get_session_id), 2.x yields (read, write)
+        from mcp.client.streamable_http import streamable_http_client
+    except ImportError:
+        # earlier MCP Python SDK 1.x versions
+        from mcp.client.streamable_http import streamablehttp_client as streamable_http_client
     from mcp.client.sse import sse_client
     from mcp.types import (
         Tool, Resource, Prompt, TextContent,
@@ -38,6 +44,17 @@ except ImportError as e:
     print(f"ERROR: MCP SDK not installed. Run: pip install mcp httpx")
     print(f"Import error: {e}")
     sys.exit(2)
+
+
+def _field(obj: Any, name: str) -> Any:
+    """Returns a result field by its MCP (camelCase) name.
+
+    MCP Python SDK 1.x models use the camelCase names of the protocol, 2.x uses snake_case attribute names.
+    """
+    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    if hasattr(obj, snake):
+        return getattr(obj, snake)
+    return getattr(obj, name)
 
 
 @dataclass
@@ -56,6 +73,8 @@ class McpComplianceTest:
         self.transport = transport
         self.results: List[TestResult] = []
         self.session: Optional[ClientSession] = None
+        # messages from the server that the transport could not parse as JSON-RPC messages
+        self.invalid_messages: List[Exception] = []
 
     @asynccontextmanager
     async def _get_transport(self):
@@ -64,9 +83,9 @@ class McpComplianceTest:
             async with sse_client(self.server_url) as (read, write):
                 yield read, write
         else:
-            # Streamable HTTP - returns (read, write, get_session_id)
-            async with streamablehttp_client(self.server_url) as (read, write, _):
-                yield read, write
+            # the read and write streams come first in every SDK version
+            async with streamable_http_client(self.server_url) as streams:
+                yield streams[0], streams[1]
 
     async def run_all_tests(self) -> bool:
         """Run all compliance tests. Returns True if all pass."""
@@ -79,7 +98,7 @@ class McpComplianceTest:
 
         try:
             async with self._get_transport() as (read, write):
-                async with ClientSession(read, write) as session:
+                async with ClientSession(read, write, message_handler=self._on_message) as session:
                     self.session = session
 
                     # Run test suites
@@ -91,11 +110,28 @@ class McpComplianceTest:
                     await self._test_resource_templates()
                     # Note: Tasks API requires session header, tested separately
 
+                    # a ping round trip after the tests ensures that every earlier server message has been received
+                    await session.send_ping()
+                    self._test_server_messages()
+
         except Exception as e:
             self._add_result("connection", False, f"Failed to connect: {e}")
             traceback.print_exc()
 
         return self._print_summary()
+
+    async def _on_message(self, message: Any) -> None:
+        """Records a server message that the transport could not parse; other messages need no handling here."""
+        if isinstance(message, Exception):
+            self.invalid_messages.append(message)
+
+    def _test_server_messages(self):
+        """Every message that the server sends must be a valid JSON-RPC message."""
+        if self.invalid_messages:
+            self._add_result("server messages", False, f"{len(self.invalid_messages)} invalid JSON-RPC message(s) "
+                f"from the server; first: {type(self.invalid_messages[0]).__name__}: {self.invalid_messages[0]}")
+        else:
+            self._add_result("server messages", True, "every server message is a valid JSON-RPC message")
 
     def _get_sdk_version(self) -> str:
         try:
@@ -134,10 +170,10 @@ class McpComplianceTest:
             result = await self.session.initialize()
             assert result is not None, "Initialize returned None"
             # SDK uses camelCase for attributes
-            assert result.protocolVersion, "Missing protocolVersion"
+            assert _field(result, "protocolVersion"), "Missing protocolVersion"
             assert result.capabilities, "Missing capabilities"
-            assert result.serverInfo, "Missing serverInfo"
-            assert result.serverInfo.name, "Missing server name"
+            assert _field(result, "serverInfo"), "Missing serverInfo"
+            assert _field(result, "serverInfo").name, "Missing server name"
 
         await self._timed_test("initialize", test_init)
 
@@ -192,7 +228,7 @@ class McpComplianceTest:
             result = await self.session.call_tool("failing_tool", {})
             assert result is not None, "tools/call returned None for failing tool"
             # The result itself has isError flag, not the content
-            assert result.isError, "Failing tool should set isError=True"
+            assert _field(result, "isError"), "Failing tool should set isError=True"
 
         await self._timed_test("tools/call (error handling)", test_call_failing)
 
@@ -202,7 +238,7 @@ class McpComplianceTest:
                 # Should return error content or raise
                 if result:
                     # Result.isError should be True for unknown tools
-                    assert result.isError, "Unknown tool should set isError=True"
+                    assert _field(result, "isError"), "Unknown tool should set isError=True"
             except Exception as e:
                 # Some SDKs may raise for unknown tools - that's acceptable
                 pass
@@ -305,11 +341,11 @@ class McpComplianceTest:
             try:
                 result = await self.session.list_resource_templates()
                 # SDK uses camelCase: resourceTemplates
-                templates = result.resourceTemplates
+                templates = _field(result, "resourceTemplates")
                 assert templates is not None, "No templates returned"
                 # Verify template structure - SDK uses camelCase: uriTemplate
                 for tpl in templates:
-                    assert tpl.uriTemplate, f"Template missing uriTemplate"
+                    assert _field(tpl, "uriTemplate"), f"Template missing uriTemplate"
                     assert tpl.name, f"Template missing name"
             except AttributeError as e:
                 # Check if the method exists but returned different structure
