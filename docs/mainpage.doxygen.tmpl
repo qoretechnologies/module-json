@@ -167,6 +167,10 @@
     @section jsonreleasenotes Release Notes
 
     @subsection json_v1_9_2 json Module Version 1.9.2
+    - fixed the ID that @ref Qore::Json::JsonRpcClient "JsonRpcClient" calls without an explicit ID use after a call
+      with an explicit ID: after a string ID, the next ID used a value that was no longer valid, which could crash
+      the program, and after an ID of \c NULL, a message was printed and calls were made without an ID; an integer
+      or float ID is continued from, and other IDs do not change the next ID
     - fixed @ref Qore::Json::JsonRpcClient::callIdWithInfo() "JsonRpcClient::callIdWithInfo()" and
       @ref Qore::Json::JsonRpcClient::callIdArgsWithInfo() "JsonRpcClient::callIdArgsWithInfo()" taking the call's ID
       as the method name and the method name as the first method argument
