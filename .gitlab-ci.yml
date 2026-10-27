@@ -1,12 +1,15 @@
+# the 2.x branch is built and tested with Qore 2.x: the qore-test-base 7.0 images (Qore 2.2.1), pinned by digest;
+# qore-test-base:develop has Qore 3, which ships the json module itself
 stages:
   - test
 
 default:
   tags:
-    - docker-exec
+    - k8s
+    - amd64
   before_script:
     - |
-        curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
         -X POST -u omusil24:${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
         -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
     - set +e
@@ -16,16 +19,16 @@ variables:
 
 test-ubuntu:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base@sha256:d5b6cb6ab1a2a4db11d6b23eb1c6aae69a1933baea89c456d2e5bbc5b1368eaf
   script:
     - |
         if test/docker_test/test-ubuntu.sh; then
-          curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST -u omusil24:${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
             -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 0
         else
-          curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST -u omusil24:${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
@@ -33,16 +36,16 @@ test-ubuntu:
 
 test-alpine:
   stage: test
-  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base@sha256:908e93e5931efb9d30e19c70b9a24a1c0eb515e701de6e58cf27d43bfb436fcf
   script:
     - |
         if test/docker_test/test-alpine.sh; then
-          curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST -u omusil24:${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
             -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 0
         else
-          curl "https://api.github.com/repos/qorelanguage/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
+          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
             -X POST -u omusil24:${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
             -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
           exit 1
