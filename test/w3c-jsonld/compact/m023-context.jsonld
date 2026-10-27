@@ -1,9 +1,0 @@
-{
-  "@context": {
-    "@vocab": "http://schema.org/",
-    "location": {
-      "@type": "@id",
-      "@container": "@type"
-    }
-  }
-}
